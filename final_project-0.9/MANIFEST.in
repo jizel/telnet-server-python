@@ -1,0 +1,8 @@
+include final.py
+include parse_args.py
+include server.py
+recursive-include commands *
+include reg_file.p
+include example-cmd_args.txt
+include example-conf.ini
+include __init__.py

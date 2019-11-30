@@ -1,0 +1,118 @@
+import subprocess
+import re
+import pickle
+import os
+import sys
+
+
+class Commands:
+
+    def __init__(self):
+        self.comm_dict = {}
+
+        # Load from file if exists
+        if os.stat('reg_file.p').st_size > 0:
+            self.reg_dict = pickle.load(open('reg_file.p', 'rb'))
+        else:
+            self.reg_dict = {}
+
+        self.client = ""
+        self.active_re_on = {}
+        self.active_re = {}
+
+        self.add_command("create", self.create)
+        self.add_command("activate", self.activate)
+        self.add_command("rm", self.rm)
+        self.add_command("ls", self.ls)
+        self.add_command("run", self.run)
+        self.add_command("quit", self.quit)
+
+    def add_command(self, trigger, function):
+        self.comm_dict[trigger] = function
+
+    def create(self, name, re):
+        """
+        Creates a regular expression re and registers it under name in reg exp dictionary
+        :param name: Name by which the reg exp is reachable
+        :param re: The reg expression you want to use
+        :return: warning string if name is longer than one word
+        """
+        if len(str(name).split(" ")) > 1:
+            return "Name argument has more than one word"
+        self.reg_dict[str(name)] = re
+        pickle.dump(self.reg_dict, open('reg_file.p', 'wb'))
+
+    def activate(self, *name):
+        """
+        Activates one reg exp which then applies to all commands' outputs
+        :param name: Name of the reg exp
+        :return: string
+        """
+        if not name:
+            self.active_re_on[self.client] = False
+            return "Active reg expression deactivated"
+        elif name[0] in self.reg_dict:
+            self.active_re_on[self.client] = True
+            self.active_re[self.client] = self.reg_dict[name[0]]
+            return "Active reg expression is: %s" % self.active_re[self.client]
+        else:
+            return "Expression with this name does not exist"
+
+    def rm(self, name):
+        """
+        Removes reg expression
+        :param name: reg exp to be removed
+        :return: string (expression was deleted / expression doesn't exist)
+        """
+        if name in self.reg_dict:
+            del self.reg_dict[name]
+            pickle.dump(self.reg_dict, open('reg_file.p', 'wb'))
+            return "Expression %s was deleted" % name
+        else:
+            return "No such expression exists"
+
+    def ls(self):
+        """
+
+        :return: reg exp dictionary as string
+        """
+        self.reg_dict = pickle.load(open('reg_file.p', 'rb'))
+        string_reg = "Available reg expressions: \n"
+        for key in self.reg_dict:
+            string_reg += key + ": " + self.reg_dict[key] + "\n"
+        return string_reg
+
+    def run(self, *cmd):
+        """
+        Enables to run any available command the server has. Result is matched with active re if any.
+        :param cmd:
+        :return: All matching lines if re is active, complete output of cmd otherwise
+        """
+        try:
+            if self.active_re_on[self.client]:
+                reg = re.compile(str(self.active_re[self.client]))
+                output = subprocess.check_output(cmd, shell=True)
+
+                if not reg.findall(output):
+                    return "Nothing matches the active regular expression\n"
+                else:
+                    out = ""
+                    for line in output.splitlines():
+                        match = reg.findall(line)
+                        if match:
+                            out += line + "\n"
+                    return out
+            else:
+                # Without active reg exp
+                output = subprocess.check_output(cmd, shell=True)
+                return output
+        except:
+            print sys.exc_info()
+            return "Exception raised, check your command!"
+
+    def quit(self):
+        """
+        Shutdown the server
+        """
+        return "quit"
+
